@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  username     String       @unique
+  passwordHash String
+  role         String       @default("USER")
+  submissions  Submission[]
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  folderName  String       @unique
+  description String       @default("")
+  visible     Boolean      @default(false)
+  timeLimit   Int          @default(2000)
+  memoryLimit Int          @default(65536)
+  submissions Submission[]
+  testCases   TestCase[]
+}
+
+model TestCase {
+  id             String @id @default(cuid())
+  taskId         String
+  index          Int
+  input          String
+  expectedOutput String
+  task           Task   @relation(fields: [taskId], references: [id])
+}
+
+model Submission {
+  id          String           @id @default(cuid())
+  userId      String
+  taskId      String
+  filePath    String
+  score       Int?
+  status      String           @default("PENDING")
+  submittedAt DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id])
+  task        Task             @relation(fields: [taskId], references: [id])
+  testResults TestCaseResult[]
+}
+
+model TestCaseResult {
+  id            String     @id @default(cuid())
+  submissionId  String
+  testCaseIndex Int
+  passed        Boolean
+  verdict       String
+  timeTaken     Int?
+  memoryUsed    Int?
+  submission    Submission @relation(fields: [submissionId], references: [id])
+}
