@@ -2,6 +2,7 @@ import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
+import DeleteUserButton from '@/components/DeleteUserButton'
 
 export default async function AdminUsersPage() {
   const session = await auth()
@@ -41,15 +42,18 @@ export default async function AdminUsersPage() {
             <div className="flex-1 min-w-0">
               <p className="font-medium text-gray-800">{user.username}</p>
             </div>
-            <span
-              className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                user.role === 'ADMIN'
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {user.role}
-            </span>
+            <div className="flex items-center gap-3">
+              <span
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  user.role === 'ADMIN'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {user.role}
+              </span>
+              {user.id !== session!.user.id && <DeleteUserButton userId={user.id} />}
+            </div>
           </div>
         ))}
       </div>
