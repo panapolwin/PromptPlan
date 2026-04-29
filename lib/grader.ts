@@ -14,7 +14,8 @@ interface RunResult {
 }
 
 async function compile(srcPath: string): Promise<{ success: boolean; binaryPath: string }> {
-  const binaryPath = srcPath.replace('.cpp', '.exe')
+  const ext = process.platform === 'win32' ? '.exe' : '.out'
+  const binaryPath = srcPath.replace('.cpp', ext)
   try {
     await execAsync(`g++ -O2 -o "${binaryPath}" "${srcPath}"`, { timeout: 30000 })
     return { success: true, binaryPath }
@@ -24,6 +25,15 @@ async function compile(srcPath: string): Promise<{ success: boolean; binaryPath:
 }
 
 async function getProcessMemoryKB(pid: number): Promise<number | null> {
+  if (process.platform === 'linux') {
+    try {
+      const statm = await fs.readFile(`/proc/${pid}/statm`, 'utf8')
+      const residentPages = parseInt(statm.trim().split(' ')[1], 10)
+      return Math.floor((residentPages * 4096) / 1024)
+    } catch {
+      return null
+    }
+  }
   return new Promise((resolve) => {
     exec(
       `wmic process where ProcessId=${pid} get WorkingSetSize /value`,

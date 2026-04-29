@@ -31,12 +31,25 @@ export async function POST(request: NextRequest) {
   }
 
   const timestamp = Date.now()
-  const uploadDir = path.join(process.cwd(), 'uploads', session.user.id, task.folderName)
-  await fs.mkdir(uploadDir, { recursive: true })
+  const tmpBase = process.platform === 'win32'
+    ? path.join(process.cwd(), 'uploads')
+    : '/tmp/uploads'
+  const uploadDir = path.join(tmpBase, session.user.id, task.folderName)
+
+  try {
+    await fs.mkdir(uploadDir, { recursive: true })
+  } catch {
+    return NextResponse.json({ error: 'Failed to prepare upload directory' }, { status: 500 })
+  }
+
   const filePath = path.join(uploadDir, `${timestamp}.cpp`)
 
-  const bytes = await file.arrayBuffer()
-  await fs.writeFile(filePath, Buffer.from(bytes))
+  try {
+    const bytes = await file.arrayBuffer()
+    await fs.writeFile(filePath, Buffer.from(bytes))
+  } catch {
+    return NextResponse.json({ error: 'Failed to save file' }, { status: 500 })
+  }
 
   const submission = await prisma.submission.create({
     data: { userId: session.user.id, taskId, filePath, status: 'PENDING' },
