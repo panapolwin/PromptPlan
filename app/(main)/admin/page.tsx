@@ -17,12 +17,20 @@ export default async function AdminPage() {
     <main className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Admin — Tasks</h1>
-        <Link
-          href="/admin/tasks/new"
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition"
-        >
-          + New Task
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/users"
+            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition"
+          >
+            Manage Users
+          </Link>
+          <Link
+            href="/admin/tasks/new"
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition"
+          >
+            + New Task
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
