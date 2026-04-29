@@ -1,6 +1,5 @@
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { getTaskDescription } from '@/lib/tasks'
 import { notFound } from 'next/navigation'
 import SubmitSection from '@/components/SubmitSection'
 import PastSubmissions from '@/components/PastSubmissions'
@@ -14,7 +13,7 @@ export default async function TaskPage({ params }: { params: { name: string } })
   })
   if (!task) notFound()
 
-  const description = await getTaskDescription(task.folderName)
+  const description = task.description
 
   const pastSubmissions = await prisma.submission.findMany({
     where: { taskId: task.id, userId },
