@@ -40,3 +40,6 @@ out
 
 # Claude Code
 .claude
+
+# Local judge server (runs on your PC, never deployed)
+judge-server/

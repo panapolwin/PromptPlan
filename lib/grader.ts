@@ -1,104 +1,39 @@
-import { spawn, exec } from 'child_process'
-import { promisify } from 'util'
 import fs from 'fs/promises'
 import { prisma } from '@/lib/prisma'
 
-const execAsync = promisify(exec)
+const JUDGE_URL = (process.env.JUDGE_SERVER_URL ?? 'http://localhost:3001').replace(/\/$/, '')
+const JUDGE_SECRET = process.env.JUDGE_SECRET ?? ''
 
-type Verdict = 'PASS' | 'WRONG_OUTPUT' | 'TIMEOUT' | 'MEMORY_EXCEEDED'
-
-interface RunResult {
-  verdict: Verdict
-  timeTaken: number
-  memoryUsed: number | null
+interface GradeResponse {
+  compiled: boolean
+  compileError: string
+  results: {
+    verdict: string
+    output: string
+    error: string
+    timeTaken: number | null
+  }[]
 }
 
-async function compile(srcPath: string): Promise<{ success: boolean; binaryPath: string }> {
-  const ext = process.platform === 'win32' ? '.exe' : '.out'
-  const binaryPath = srcPath.replace('.cpp', ext)
+async function callGrade(
+  code: string,
+  testCases: { input: string; expectedOutput: string }[],
+  timeLimit: number,
+): Promise<GradeResponse | null> {
   try {
-    await execAsync(`g++ -O2 -o "${binaryPath}" "${srcPath}"`, { timeout: 30000 })
-    return { success: true, binaryPath }
-  } catch {
-    return { success: false, binaryPath: '' }
-  }
-}
-
-async function getProcessMemoryKB(pid: number): Promise<number | null> {
-  if (process.platform === 'linux') {
-    try {
-      const statm = await fs.readFile(`/proc/${pid}/statm`, 'utf8')
-      const residentPages = parseInt(statm.trim().split(' ')[1], 10)
-      return Math.floor((residentPages * 4096) / 1024)
-    } catch {
-      return null
-    }
-  }
-  return new Promise((resolve) => {
-    exec(
-      `wmic process where ProcessId=${pid} get WorkingSetSize /value`,
-      (err, stdout) => {
-        if (err) return resolve(null)
-        const match = stdout.match(/WorkingSetSize=(\d+)/)
-        if (!match) return resolve(null)
-        resolve(Math.floor(parseInt(match[1], 10) / 1024))
+    const res = await fetch(`${JUDGE_URL}/grade`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(JUDGE_SECRET ? { Authorization: `Bearer ${JUDGE_SECRET}` } : {}),
       },
-    )
-  })
-}
-
-function runTestCase(
-  binaryPath: string,
-  input: string,
-  expectedOutput: string,
-  timeLimitMs: number,
-  memoryLimitKB: number,
-): Promise<RunResult> {
-  return new Promise((resolve) => {
-    const startTime = Date.now()
-    let peakMemory = 0
-    let timedOut = false
-    let memExceeded = false
-    let stdout = ''
-    let settled = false
-
-    const child = spawn(binaryPath, [], { stdio: ['pipe', 'pipe', 'pipe'] })
-
-    child.stdin.write(input)
-    child.stdin.end()
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
-
-    const memTimer = setInterval(async () => {
-      if (settled || !child.pid) return clearInterval(memTimer)
-      const mem = await getProcessMemoryKB(child.pid)
-      if (mem !== null) {
-        peakMemory = Math.max(peakMemory, mem)
-        if (mem > memoryLimitKB) {
-          memExceeded = true
-          child.kill()
-        }
-      }
-    }, 200)
-
-    const timeoutHandle = setTimeout(() => {
-      timedOut = true
-      child.kill()
-    }, timeLimitMs)
-
-    child.on('close', () => {
-      if (settled) return
-      settled = true
-      clearInterval(memTimer)
-      clearTimeout(timeoutHandle)
-      const timeTaken = Date.now() - startTime
-
-      if (memExceeded) return resolve({ verdict: 'MEMORY_EXCEEDED', timeTaken, memoryUsed: peakMemory })
-      if (timedOut) return resolve({ verdict: 'TIMEOUT', timeTaken: timeLimitMs, memoryUsed: peakMemory || null })
-
-      const verdict: Verdict = stdout.trim() === expectedOutput.trim() ? 'PASS' : 'WRONG_OUTPUT'
-      resolve({ verdict, timeTaken, memoryUsed: peakMemory || null })
+      body: JSON.stringify({ code, testCases, timeLimit }),
+      signal: AbortSignal.timeout(timeLimit * testCases.length + 20_000),
     })
-  })
+    return res.json() as Promise<GradeResponse>
+  } catch {
+    return null
+  }
 }
 
 export async function gradeSubmission(submissionId: string): Promise<void> {
@@ -113,8 +48,10 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
     data: { status: 'RUNNING' },
   })
 
-  const { success, binaryPath } = await compile(submission.filePath)
-  if (!success) {
+  let code: string
+  try {
+    code = await fs.readFile(submission.filePath, 'utf8')
+  } catch {
     await prisma.submission.update({
       where: { id: submissionId },
       data: { status: 'COMPILE_ERROR', score: 0 },
@@ -127,19 +64,39 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
     orderBy: { index: 'asc' },
   })
 
-  const { timeLimit, memoryLimit } = submission.task
+  if (testCases.length === 0) {
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: { status: 'ACCEPTED', score: 100 },
+    })
+    return
+  }
+
+  const response = await callGrade(code, testCases, submission.task.timeLimit)
+
+  if (!response) {
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: { status: 'COMPILE_ERROR', score: 0 },
+    })
+    return
+  }
+
+  if (!response.compiled) {
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: { status: 'COMPILE_ERROR', score: 0 },
+    })
+    return
+  }
 
   let passedCount = 0
   let overallStatus = 'ACCEPTED'
 
-  for (const tc of testCases) {
-    const result = await runTestCase(
-      binaryPath,
-      tc.input,
-      tc.expectedOutput,
-      timeLimit,
-      memoryLimit,
-    )
+  for (let i = 0; i < testCases.length; i++) {
+    const tc = testCases[i]
+    const result = response.results[i]
+    if (!result) break
 
     const passed = result.verdict === 'PASS'
     if (passed) passedCount++
@@ -151,23 +108,20 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
         passed,
         verdict: result.verdict,
         timeTaken: result.timeTaken,
-        memoryUsed: result.memoryUsed,
+        memoryUsed: null,
       },
     })
 
     if (!passed && overallStatus === 'ACCEPTED') {
       if (result.verdict === 'TIMEOUT') overallStatus = 'TIME_LIMIT'
-      else if (result.verdict === 'MEMORY_EXCEEDED') overallStatus = 'MEMORY_LIMIT'
       else overallStatus = 'WRONG_ANSWER'
     }
   }
 
-  const score = testCases.length > 0 ? Math.floor((passedCount / testCases.length) * 100) : 0
+  const score = Math.floor((passedCount / testCases.length) * 100)
 
   await prisma.submission.update({
     where: { id: submissionId },
     data: { status: overallStatus, score },
   })
-
-  try { await fs.unlink(binaryPath) } catch {}
 }
