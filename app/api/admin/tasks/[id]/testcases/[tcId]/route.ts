@@ -31,5 +31,15 @@ export async function DELETE(
   }
 
   await prisma.testCase.delete({ where: { id: params.tcId } })
+
+  const remaining = await prisma.testCase.findMany({
+    where: { taskId: params.id },
+    orderBy: { index: 'asc' },
+  })
+
+  await prisma.$transaction(
+    remaining.map((tc, i) => prisma.testCase.update({ where: { id: tc.id }, data: { index: i + 1 } }))
+  )
+
   return NextResponse.json({ ok: true })
 }

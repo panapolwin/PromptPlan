@@ -1,40 +1,6 @@
 import fs from 'fs/promises'
 import { prisma } from '@/lib/prisma'
-
-const JUDGE_URL = (process.env.JUDGE_SERVER_URL ?? 'http://localhost:3001').replace(/\/$/, '')
-const JUDGE_SECRET = process.env.JUDGE_SECRET ?? ''
-
-interface GradeResponse {
-  compiled: boolean
-  compileError: string
-  results: {
-    verdict: string
-    output: string
-    error: string
-    timeTaken: number | null
-  }[]
-}
-
-async function callGrade(
-  code: string,
-  testCases: { input: string; expectedOutput: string }[],
-  timeLimit: number,
-): Promise<GradeResponse | null> {
-  try {
-    const res = await fetch(`${JUDGE_URL}/grade`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(JUDGE_SECRET ? { Authorization: `Bearer ${JUDGE_SECRET}` } : {}),
-      },
-      body: JSON.stringify({ code, testCases, timeLimit }),
-      signal: AbortSignal.timeout(timeLimit * testCases.length + 20_000),
-    })
-    return res.json() as Promise<GradeResponse>
-  } catch {
-    return null
-  }
-}
+import { judgeCode } from '@/lib/judge'
 
 export async function gradeSubmission(submissionId: string): Promise<void> {
   const submission = await prisma.submission.findUnique({
@@ -72,15 +38,7 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
     return
   }
 
-  const response = await callGrade(code, testCases, submission.task.timeLimit)
-
-  if (!response) {
-    await prisma.submission.update({
-      where: { id: submissionId },
-      data: { status: 'COMPILE_ERROR', score: 0 },
-    })
-    return
-  }
+  const response = await judgeCode(code, testCases, submission.task.timeLimit)
 
   if (!response.compiled) {
     await prisma.submission.update({
@@ -107,8 +65,6 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
         testCaseIndex: tc.index,
         passed,
         verdict: result.verdict,
-        timeTaken: result.timeTaken,
-        memoryUsed: null,
       },
     })
 

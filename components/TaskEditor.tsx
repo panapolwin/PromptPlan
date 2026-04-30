@@ -16,8 +16,6 @@ interface Task {
   name: string
   description: string
   visible: boolean
-  timeLimit: number
-  memoryLimit: number
   testCases: TestCase[]
 }
 
@@ -26,8 +24,6 @@ export default function TaskEditor({ task }: { task: Task }) {
 
   const [name, setName] = useState(task.name)
   const [description, setDescription] = useState(task.description)
-  const [timeLimit, setTimeLimit] = useState(task.timeLimit)
-  const [memoryLimit, setMemoryLimit] = useState(task.memoryLimit)
   const [visible, setVisible] = useState(task.visible)
   const [savingTask, setSavingTask] = useState(false)
   const [taskSavedAt, setTaskSavedAt] = useState<Date | null>(null)
@@ -45,7 +41,7 @@ export default function TaskEditor({ task }: { task: Task }) {
     await fetch(`/api/admin/tasks/${task.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description, timeLimit, memoryLimit, visible }),
+      body: JSON.stringify({ name, description, visible }),
     })
     setSavingTask(false)
     setTaskSavedAt(new Date())
@@ -95,7 +91,9 @@ export default function TaskEditor({ task }: { task: Task }) {
 
   async function deleteTestCase(id: string) {
     await fetch(`/api/admin/tasks/${task.id}/testcases/${id}`, { method: 'DELETE' })
-    setTestCases((prev) => prev.filter((tc) => tc.id !== id))
+    setTestCases((prev) =>
+      prev.filter((tc) => tc.id !== id).map((tc, i) => ({ ...tc, index: i + 1 }))
+    )
     setDirtyIds((prev) => { const s = new Set(prev); s.delete(id); return s })
   }
 
@@ -159,31 +157,6 @@ export default function TaskEditor({ task }: { task: Task }) {
             onChange={(e) => { setDescription(e.target.value); setTaskSavedAt(null) }}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono resize-y"
           />
-        </div>
-
-        <div className="flex gap-4">
-          <div className="flex flex-col gap-1.5 flex-1">
-            <label className="text-sm font-medium text-gray-700">Time Limit (ms)</label>
-            <input
-              type="number"
-              min={100}
-              max={30000}
-              value={timeLimit}
-              onChange={(e) => { setTimeLimit(Number(e.target.value)); setTaskSavedAt(null) }}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5 flex-1">
-            <label className="text-sm font-medium text-gray-700">Memory Limit (KB)</label>
-            <input
-              type="number"
-              min={1024}
-              max={524288}
-              value={memoryLimit}
-              onChange={(e) => { setMemoryLimit(Number(e.target.value)); setTaskSavedAt(null) }}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
         </div>
 
         <div className="flex items-center justify-between pt-1 border-t border-gray-100">
