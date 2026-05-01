@@ -110,9 +110,6 @@ export async function judgeCode(
 
   await cleanup(srcPath)
 
-  // warmup run — loads binary into OS page cache, reduces cold-start timing overhead
-  await runBinary(binPath, '', Math.min(runTimeout, 2000))
-
   const results: TestResult[] = []
   for (const tc of testCases) {
     const run = await runBinary(binPath, tc.input ?? '', runTimeout)
@@ -121,7 +118,7 @@ export async function judgeCode(
       error: run.error,
       verdict: !run.ok
         ? (run.error === 'TIMEOUT' ? 'TIMEOUT' : 'WRONG_OUTPUT')
-        : (run.output.trim() === (tc.expectedOutput ?? '').trim() ? 'PASS' : 'WRONG_OUTPUT'),
+        : (run.output.replace(/\r/g, '').trim() === (tc.expectedOutput ?? '').replace(/\r/g, '').trim() ? 'PASS' : 'WRONG_OUTPUT'),
     })
   }
 

@@ -12,8 +12,6 @@ export default function NewTaskForm() {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [description, setDescription] = useState('')
-  const [timeLimit, setTimeLimit] = useState(2000)
-  const [memoryLimit, setMemoryLimit] = useState(65536)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -29,8 +27,6 @@ export default function NewTaskForm() {
         name,
         folderName: slug,
         description,
-        timeLimit,
-        memoryLimit,
       }),
     })
 
@@ -91,31 +87,6 @@ export default function NewTaskForm() {
           placeholder="# Task title&#10;&#10;Problem statement here..."
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono resize-y"
         />
-      </div>
-
-      <div className="flex gap-4">
-        <div className="flex flex-col gap-1.5 flex-1">
-          <label className="text-sm font-medium text-gray-700">Time Limit (ms)</label>
-          <input
-            type="number"
-            min={100}
-            max={30000}
-            value={timeLimit}
-            onChange={(e) => setTimeLimit(Number(e.target.value))}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5 flex-1">
-          <label className="text-sm font-medium text-gray-700">Memory Limit (KB)</label>
-          <input
-            type="number"
-            min={1024}
-            max={524288}
-            value={memoryLimit}
-            onChange={(e) => setMemoryLimit(Number(e.target.value))}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
       </div>
 
       <div className="flex justify-end gap-3 pt-1">
