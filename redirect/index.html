@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting…</title>
+  <script>
+    fetch('./config.json')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('l').href = data.url;
+        window.location.replace(data.url);
+      });
+  </script>
+</head>
+<body>
+  <p>Redirecting… <a id="l" href="#">click here if nothing happens</a></p>
+</body>
+</html>

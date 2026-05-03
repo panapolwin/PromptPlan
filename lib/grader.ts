@@ -48,30 +48,21 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
     return
   }
 
+  await prisma.testCaseResult.createMany({
+    data: testCases.map((tc, i) => ({
+      submissionId,
+      testCaseIndex: tc.index,
+      passed: response.results[i]?.verdict === 'PASS',
+      verdict: response.results[i]?.verdict ?? 'WRONG_OUTPUT',
+    })),
+  })
+
   let passedCount = 0
   let overallStatus = 'ACCEPTED'
-
-  for (let i = 0; i < testCases.length; i++) {
-    const tc = testCases[i]
-    const result = response.results[i]
-    if (!result) break
-
-    const passed = result.verdict === 'PASS'
-    if (passed) passedCount++
-
-    await prisma.testCaseResult.create({
-      data: {
-        submissionId,
-        testCaseIndex: tc.index,
-        passed,
-        verdict: result.verdict,
-      },
-    })
-
-    if (!passed && overallStatus === 'ACCEPTED') {
-      if (result.verdict === 'TIMEOUT') overallStatus = 'TIME_LIMIT'
-      else overallStatus = 'WRONG_ANSWER'
-    }
+  for (const result of response.results) {
+    if (result.verdict === 'PASS') passedCount++
+    else if (overallStatus === 'ACCEPTED')
+      overallStatus = result.verdict === 'TIMEOUT' ? 'TIME_LIMIT' : 'WRONG_ANSWER'
   }
 
   const score = Math.floor((passedCount / testCases.length) * 100)
